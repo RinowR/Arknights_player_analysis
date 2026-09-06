@@ -2,7 +2,7 @@
 # 《明日方舟》玩家问卷 - 描述性统计与交叉分析
 # =============================================
 # 【文件说明】
-#   本脚本对清洗后的问卷数据进行全面的描述性统计和交叉分析，
+#   对清洗后的问卷数据进行全面的描述性统计和交叉分析，
 #   输出终端报告、Excel 汇总表和可视化图表。
 #
 # 【分析框架】
@@ -15,7 +15,9 @@
 #
 # 【方法说明】
 #   采用大样本统计方法（均值、百分比、交叉表等），
-#   当前样本量较小（n=28），统计推断效力有限，结果仅供探索性参考。
+#   当前样本量较小（n≈28），统计推断效力有限，结果仅供探索性参考。
+#   代码内置小样本保护：分组 n<3 时自动跳过，n<10 时标注"仅供参考"。
+#   大样本下可直接复用，无需修改代码逻辑。
 # =============================================
 
 import pandas as pd
@@ -32,9 +34,9 @@ warnings.filterwarnings('ignore')
 # ------------------------------
 # 1. 全局设置
 # ------------------------------
+# 设置中文字体，解决图表中文乱码问题
 plt.rcParams['font.sans-serif'] = ['SimHei', 'Microsoft YaHei', 'Arial Unicode MS']
 plt.rcParams['axes.unicode_minus'] = False
-
 
 # ------------------------------
 # 2. 读取数据
@@ -50,7 +52,7 @@ df = pd.read_excel('清洗后问卷数据.xlsx')
 total_n = len(df)
 print(f"\n📌 当前样本量：{total_n} 份")
 
-# 数值列缺失值填充 0
+# 数值列缺失值填充 0（代表"未参与，不评价"）
 numeric_cols = df.select_dtypes(include=[np.number]).columns
 df[numeric_cols] = df[numeric_cols].fillna(0)
 
@@ -61,11 +63,11 @@ NPS_COL = '18、您有多大可能性将《明日方舟》推荐给朋友？'
 PAY_COL = '13、您在《明日方舟》中的累计付费金额大约是多少？'
 WILLING_COL = '20、假设《明日方舟》计划推出一个全新的【常驻联机合作玩法】，请问您的参与意愿如何？'
 
-# 玩家类型列（Q7 拆分后）
+# 玩家类型列（Q7 拆分后产生的哑变量列）
 TYPE_COLS = [c for c in df.columns if '党' in c and (
     '收集' in c or '剧情' in c or '强度' in c or '休闲' in c or 'XP' in c)]
 
-# 痛点列（Q10 拆分后）
+# 痛点列（Q10 拆分后产生的哑变量列）
 PAIN_COLS = ['抽卡概率低', '资源获取速度慢', '关卡难度过高', '活动内容重复',
              '干员平衡性问题', '社交功能薄弱', '没有明显不满']
 PAIN_COLS = [p for p in PAIN_COLS if p in df.columns]
@@ -73,12 +75,14 @@ PAIN_COLS = [p for p in PAIN_COLS if p in df.columns]
 # 满意度列
 SAT_COLS = ['满意_美术', '满意_剧情', '满意_关卡', '满意_音乐', '满意_整体']
 
-
 # ------------------------------
 # 4. 辅助函数
 # ------------------------------
 def print_table(title, series):
-    """打印频次表格"""
+    """
+    打印频次表格（选项、人数、占比）
+    占比 = 人数 / 总样本量
+    """
     print(f"\n【{title}】")
     table = pd.DataFrame({
         '选项': series.index,
@@ -90,6 +94,10 @@ def print_table(title, series):
 
 # =============================================
 # 第一部分：描述性统计
+# =============================================
+# 对问卷中的单选题/多选拆分后的列进行频次统计，
+# 包括：画像（性别、年龄、职业、游戏时长、每日时长）、
+# 时间分配、玩家类型、满意度、痛点、付费、NPS、联机意愿等。
 # =============================================
 
 # ------------------------------
@@ -421,7 +429,6 @@ print(f"⚠️  当前样本量 {total_n} 份，分组后多数子组 n<10，统
 print("    以下结果仅为探索性参考，正式结论需扩大样本后验证。")
 print("=" * 80)
 
-
 # ---------- H1：玩家类型 × 付费金额 ----------
 print("\n【H1】玩家类型 × 付费金额")
 print("  假设：XP 党 / 收集党 可能是付费主力")
@@ -462,7 +469,7 @@ if TYPE_COLS and PAY_COL in df.columns:
         # 竖着绘图（kind='bar'）
         h1_df.T.plot(kind='bar', stacked=True, ax=ax, colormap='viridis', width=0.7)
 
-        # 关键：x轴标签横着放（rotation=0），居中
+        # x轴标签横着放（rotation=0），居中
         ax.set_xticklabels(short_labels, rotation=0, ha='center', fontsize=11)
 
         ax.set_title('各玩家类型付费分布', fontsize=14, pad=20)
@@ -476,6 +483,10 @@ if TYPE_COLS and PAY_COL in df.columns:
         plt.subplots_adjust(right=0.78, bottom=0.15, top=0.92)
         plt.savefig('cross_type_pay.png', dpi=300, bbox_inches='tight')
         print("  ✅ 已保存：cross_type_pay.png")
+    else:
+        print("  ⚠️ 无有效数据，跳过 H1 图表生成")
+else:
+    print("  ⚠️ 数据不足，跳过 H1")
 
 # ---------- H2：痛点 × NPS ----------
 print("\n" + "-" * 40)
@@ -506,7 +517,6 @@ if PAIN_COLS and NPS_COL in df.columns:
 else:
     print("  ⚠️ 数据不足，跳过 H2")
 
-
 # ---------- H3：联机意愿 × 满意度 ----------
 print("\n" + "-" * 40)
 print("【H3】联机意愿 × 整体满意度")
@@ -529,7 +539,6 @@ if WILLING_COL in df.columns:
                 print(f"    {idx}: 均值{row['mean']:.2f} (n={row['count']}) ⚠️ 样本量<3")
 else:
     print("  ⚠️ 数据不足，跳过 H3")
-
 
 # ---------- H4：玩家类型 × 行为验证 ----------
 print("\n" + "-" * 40)
@@ -608,7 +617,6 @@ print("-" * 80)
 print("⚠️  小样本提示：以下分析仅展示可用的数据，样本量不足时自动跳过。")
 print("=" * 80)
 
-
 # ---------- C1：玩家类型 × 满意度 ----------
 print("\n【C1】玩家类型 × 满意度")
 print("  业务问题：不同类型的玩家，满意度短板分别是什么？")
@@ -641,7 +649,6 @@ if TYPE_COLS and all(c in df.columns for c in SAT_COLS):
         print("  ⚠️ 各类型样本量均 < 3，跳过 C1")
 else:
     print("  ⚠️ 数据不足，跳过 C1")
-
 
 # ---------- C2：付费 × 满意度 ----------
 print("\n" + "-" * 40)
@@ -685,7 +692,6 @@ if PAY_COL in df.columns and '满意_整体' in df.columns:
 else:
     print("  ⚠️ 数据不足，跳过 C2")
 
-
 # ---------- C3：玩家类型 × 痛点 ----------
 print("\n" + "-" * 40)
 print("【C3】玩家类型 × 痛点")
@@ -715,7 +721,6 @@ if TYPE_COLS and PAIN_COLS:
         print("  ⚠️ 各类型样本量均 < 3，跳过 C3")
 else:
     print("  ⚠️ 数据不足，跳过 C3")
-
 
 # ---------- C4：痛点 × 付费 ----------
 print("\n" + "-" * 40)
@@ -747,7 +752,6 @@ if PAIN_COLS and PAY_COL in df.columns:
         print("  ⚠️ 分组样本量不足（高付费或低付费 < 3），跳过 C4")
 else:
     print("  ⚠️ 数据不足，跳过 C4")
-
 
 # ---------- C5：玩家类型 × 联机意愿 ----------
 print("\n" + "-" * 40)

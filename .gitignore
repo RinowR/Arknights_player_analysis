@@ -1,0 +1,21 @@
+# Python
+__pycache__/
+*.pyc
+venv/
+.venv/
+env/
+.env
+.env.local
+
+# 数据文件
+*.xlsx
+*.csv
+!清洗后问卷数据.xlsx
+
+# IDE
+.vscode/
+.idea/
+
+# 其他
+.DS_Store
+*.log
